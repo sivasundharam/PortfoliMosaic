@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Portfolio Assistance AI</title>
+    <style>
+      html, body, #root { height: 100%; }
+      body { margin: 0; }
+
+      /* Markdown table styling */
+      .markdown-content table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 12px 0;
+        font-size: 14px;
+      }
+
+      .markdown-content table th {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        color: white;
+        padding: 10px 12px;
+        text-align: left;
+        font-weight: 600;
+        border: 1px solid #e5e7eb;
+      }
+
+      .markdown-content table td {
+        padding: 8px 12px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+      }
+
+      .markdown-content table tr:nth-child(even) td {
+        background: #f9fafb;
+      }
+
+      .markdown-content table tr:hover td {
+        background: #f3f4f6;
+      }
+
+      /* Markdown headings */
+      .markdown-content h1, .markdown-content h2, .markdown-content h3 {
+        margin-top: 16px;
+        margin-bottom: 8px;
+        color: #111827;
+      }
+
+      .markdown-content h1 { font-size: 20px; font-weight: 700; }
+      .markdown-content h2 { font-size: 18px; font-weight: 600; }
+      .markdown-content h3 { font-size: 16px; font-weight: 600; }
+
+      /* Markdown paragraphs */
+      .markdown-content p {
+        margin: 8px 0;
+        line-height: 1.65;
+      }
+
+      /* Markdown strong/bold */
+      .markdown-content strong {
+        font-weight: 600;
+        color: #1f2937;
+      }
+
+      /* Markdown lists */
+      .markdown-content ul, .markdown-content ol {
+        margin: 8px 0;
+        padding-left: 24px;
+      }
+
+      .markdown-content li {
+        margin: 4px 0;
+      }
+
+      /* Markdown code */
+      .markdown-content code {
+        background: #f3f4f6;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
