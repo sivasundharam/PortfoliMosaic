@@ -8,27 +8,30 @@
 
 ## 📊 Problem Statement
 
-Modern investors manage increasingly complex financial lives — across multiple brokerage firms, countries, and asset types. Yet, their tools often fail to connect fragments of financial data into actionable insights.
+Modern investors face growing complexity managing portfolios across multiple brokerages, countries, and asset classes. However, most existing tools treat investments as siloed, static data rather than interconnected financial realities.
 
-**Traditional portfolio management assumes:**  
-- All investments are held in a single account.
-- Investors focus only on domestic markets.
-- Analysis is static, lacking real-time performance and risk synthesis.
+**Traditional portfolio management tools assume:**  
+- Investors operate within a single brokerage or market.  
+- Analysis is limited to domestic assets.  
+- Data is isolated without real-time integration of tax documents, financial statements, and market data.
 
-**In reality, today’s investors:**
-- Use multiple brokerage accounts for diversification, perks, or specialized investments.
-- Hold international assets for growth and risk management.
-- Need dynamic, context-aware analytics that unite all their holdings, tax docs, and financial statements.
+**In practice, investors worldwide:**  
+- Hold multiple brokerage accounts for diversification, tax efficiency, and specialized access.  
+- Invest internationally to capture growth and manage geopolitical risk.  
+- Require dynamic, holistic tools capable of synthesizing structured holdings, unstructured documents, and real-time market data into actionable insights.
 
 ***
 
 ## 📈 Key Metrics Highlighting the Problem
 
-- **~25%** of U.S. investors maintain more than one brokerage account, seeking diversification, lower fees, or special features. *(Bankrate, 2025; NerdWallet, 2021)*[12][13]
-- **U.S. direct investment abroad reached $6.68 trillion at end-2023,** with millions of individuals holding assets in international markets. *(BEA.gov, 2025)*[14]
-- **Long-term diversified investors typically hold between 15 and 30 stocks,** with advanced models showing risk continues to decline even with 50+ stocks. *(YouTube/NDVR, 2025; Cabot Wealth, 2025)*[15][16]
-- **74% of global firms cite cross-border compliance as a top challenge,** making unified investment oversight a necessity for international investors. *(eFlow Global, 2024)*
+- A significant portion of global investors maintain **multiple brokerage accounts**, diversifying across platforms for optimal investing conditions. *[Industry research, 2024–2025](https://www.bcg.com/publications/2025/future-of-finance)*  
+- **International investments constitute trillions in assets globally**, underscoring the need for oversight across borders. *[Global financial reports, 2025](https://www.imf.org/en/Publications/GFSR)*
+- Long-term investors typically hold **between 15 and 30 securities**, though diversification benefits can increase with larger portfolios. *(Global wealth studies, 2024–2025)*  
+- Over **70% of firms cite cross-border compliance and reporting challenges** as major hurdles in international investing. *(Global compliance surveys, 2024)*
 
+**👉 The challenge lies not in accessing data, but in unifying fragmented information into coherent, actionable insights.**
+
+***
 
 **Our solution** is extracting, aggregating, and answering complex portfolio, compliance, and risk questions from ALL your financial documents — across brokerages, countries, and asset types.
 
@@ -74,13 +77,11 @@ PortfoliMosaic is designed to help you:
    - "Show me all my Apple shares across accounts"
    - "What is the total value of assets on the balance sheet?"
    - "What dividends did I receive from Microsoft?"
-   - "What is the current stock price of TSLA?"
 
 3. **📊 Get Structured Insights**
    - Automatic extraction of holdings, transactions, and account details
    - Multi-account portfolio tracking with brokerage information
    - Company-specific financial statement analysis
-   - Real-time stock price lookups
 
 4. **🔍 Session-Based Document Management**
    - Each browser session has isolated document storage
@@ -96,10 +97,9 @@ This application is **NOT**:
 1. **❌ A Financial Advisor** - Does not provide investment advice or recommendations
 2. **❌ A Trading Platform** - Cannot execute trades or manage your actual portfolio
 3. **❌ A Tax Preparation Tool** - Does not file taxes or provide tax advice
-4. **❌ A Real-Time Market Data Provider** - Stock prices are for reference only
-5. **❌ A Production-Ready System** - This is a development/demo application
-6. **❌ A Secure Vault** - Not designed for storing sensitive financial data long-term
-7. **❌ A Multi-User Platform** - No user authentication or multi-tenant support
+4. **❌ A Production-Ready System** - This is a development/demo application
+5. **❌ A Secure Vault** - Not designed for storing sensitive financial data long-term
+6. **❌ A Multi-User Platform** - No user authentication or multi-tenant support
 
 ---
 
@@ -123,7 +123,6 @@ graph TB
             ChatAPI["/chat"]
             HoldingsAPI["/holdings"]
             DocsAPI["/documents"]
-            StockAPI["/stock-price"]
         end
 
         subgraph Processing["Document Processing Pipeline"]
@@ -186,7 +185,7 @@ graph TB
     classDef processStyle fill:#fff9c4,stroke:#f9a825,stroke-width:2px,color:#000
 
     class Upload,Chat,Holdings frontendStyle
-    class UploadAPI,ChatAPI,HoldingsAPI,DocsAPI,StockAPI,Agent,LLM,Tools backendStyle
+    class UploadAPI,ChatAPI,HoldingsAPI,DocsAPI,Agent,LLM,Tools backendStyle
     class Step1,Step2,Step3 processStyle
     class DB,Vector,Files storageStyle
     class ADE,OpenAI externalStyle
@@ -359,17 +358,9 @@ flowchart TD
        session_id = ?
     3. Return with brokerage info"]
 
-    Step2 -->|"Current price of AAPL<br/>Stock price of Tesla"| ToolPrice["💰 get_stock_price
-    ━━━━━━━━━━━━━━━━━━━━━
-    1. Extract ticker symbol
-    2. Call Google Finance API
-    3. Return current price
-       + change %"]
-
     ToolRAG --> Step3
     ToolSQL --> Step3
     ToolSpecific --> Step3
-    ToolPrice --> Step3
 
     Step3["🧠 Step 3: LLM Generates Answer
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -389,7 +380,6 @@ flowchart TD
     style ToolRAG fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,text-align:left
     style ToolSQL fill:#fff9c4,stroke:#f9a825,stroke-width:2px,text-align:left
     style ToolSpecific fill:#fce4ec,stroke:#c2185b,stroke-width:2px,text-align:left
-    style ToolPrice fill:#e0f2f1,stroke:#00796b,stroke-width:2px,text-align:left
     style Step3 fill:#ede7f6,stroke:#512da8,stroke-width:2px,text-align:left
     style Complete fill:#c8e6c9,stroke:#2e7d32,stroke-width:3px
 ```
@@ -617,13 +607,6 @@ Access API documentation at: **http://localhost:8000/docs**
 "What is the shareholder equity?"
 ```
 
-**Stock Price Questions:**
-```
-"What is the current price of AAPL?"
-"Stock price of Tesla"
-"How much is Microsoft trading at?"
-```
-
 **Multi-Company Questions:**
 ```
 "What is Apple's total assets?"
@@ -762,21 +745,7 @@ Response:
 }
 ```
 
-#### 6. Get Stock Price
-```http
-GET /api/stock-price/{symbol}
-
-Response:
-{
-  "symbol": "AAPL",
-  "price": 185.50,
-  "change": 2.30,
-  "change_percent": 1.26,
-  "timestamp": "2024-11-08T15:45:00"
-}
-```
-
-#### 7. Re-extract Document
+#### 6. Re-extract Document
 ```http
 POST /api/documents/{document_id}/re-extract
 
@@ -808,7 +777,6 @@ PortfoliMosaic/
 │   │       ├── classifier.py         # Document type classifier
 │   │       ├── vector_store.py       # FAISS vector database
 │   │       ├── embeddings.py         # Text embedding service
-│   │       ├── stock_price.py        # Stock price lookup
 │   │       ├── consolidator.py       # Data consolidation
 │   │       └── document_parser.py    # PDF parsing utilities
 │   ├── migrations/                   # Database migrations
@@ -839,7 +807,7 @@ PortfoliMosaic/
 
 **Backend:**
 - `main.py` - API endpoints, document processing pipeline, request handling
-- `portfolio_agent.py` - LangChain agent with tools (RAG, SQL, stock price)
+- `portfolio_agent.py` - LangChain agent with tools (RAG, SQL)
 - `landing_ai.py` - Client for Landing AI ADE API (parse & extract)
 - `extraction_schema.py` - JSON schema defining what data to extract
 - `vector_store.py` - FAISS vector database with session filtering
