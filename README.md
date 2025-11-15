@@ -3,7 +3,19 @@
 **PortfoliMosaic** is an intelligent financial document analysis platform that helps you understand your investment portfolio, tax documents, and financial statements through natural language conversations.
 
 ---
+## 🎥 Demo Video
 
+[![PortfoliMosaic Demo](https://img.youtube.com/vi/vH5-Af0NfU4/maxresdefault.jpg)](https://youtu.be/vH5-Af0NfU4)
+
+**[▶️ Watch the Demo on YouTube](https://youtu.be/vH5-Af0NfU4)**
+
+See PortfoliMosaic in action! This demo showcases:
+- 📄 Multi-document upload and processing
+- 🤖 AI-powered portfolio analysis
+- 💬 Natural language Q&A about your holdings
+- 📊 Real-time extraction of financial data
+
+---
 ***
 
 ## 📊 Problem Statement
