@@ -237,17 +237,18 @@ Last Updated: {price_data.get('timestamp', 'N/A')}"""
 
                 if query_type == "count_accounts":
                     # Count unique accounts (session-filtered)
+                    # SECURITY: Require session_id to prevent data leaks
+                    if not session_id:
+                        return "Error: session_id is required for security. Cannot query holdings without session isolation."
+
                     accounts_query = self.db_session.query(
                         Holding.brokerage_firm,
                         Holding.account_number,
                         Holding.account_type
                     ).join(Document, Holding.document_id == Document.id).filter(
-                        Holding.brokerage_firm.isnot(None)
+                        Holding.brokerage_firm.isnot(None),
+                        Document.session_id == session_id  # Always filter by session
                     )
-
-                    # Filter by session_id
-                    if session_id:
-                        accounts_query = accounts_query.filter(Document.session_id == session_id)
 
                     accounts = accounts_query.distinct().all()
 
@@ -269,15 +270,16 @@ Last Updated: {price_data.get('timestamp', 'N/A')}"""
 
                 elif query_type == "list_brokerages":
                     # List unique brokerage firms (session-filtered)
+                    # SECURITY: Require session_id to prevent data leaks
+                    if not session_id:
+                        return "Error: session_id is required for security. Cannot query holdings without session isolation."
+
                     firms_query = self.db_session.query(Holding.brokerage_firm).join(
                         Document, Holding.document_id == Document.id
                     ).filter(
-                        Holding.brokerage_firm.isnot(None)
+                        Holding.brokerage_firm.isnot(None),
+                        Document.session_id == session_id  # Always filter by session
                     )
-
-                    # Filter by session_id
-                    if session_id:
-                        firms_query = firms_query.filter(Document.session_id == session_id)
 
                     firms = firms_query.distinct().all()
 
@@ -291,13 +293,15 @@ Last Updated: {price_data.get('timestamp', 'N/A')}"""
 
                 elif query_type == "list_holdings":
                     # List all holdings with complete information (session-filtered)
+                    # SECURITY: Require session_id to prevent data leaks
+                    if not session_id:
+                        return "Error: session_id is required for security. Cannot query holdings without session isolation."
+
                     holdings_query = self.db_session.query(Holding).join(
                         Document, Holding.document_id == Document.id
+                    ).filter(
+                        Document.session_id == session_id  # Always filter by session
                     )
-
-                    # Filter by session_id
-                    if session_id:
-                        holdings_query = holdings_query.filter(Document.session_id == session_id)
 
                     holdings = holdings_query.all()
 
@@ -341,13 +345,15 @@ Last Updated: {price_data.get('timestamp', 'N/A')}"""
 
                 elif query_type == "holdings_by_brokerage":
                     # Group holdings by brokerage firm (session-filtered)
+                    # SECURITY: Require session_id to prevent data leaks
+                    if not session_id:
+                        return "Error: session_id is required for security. Cannot query holdings without session isolation."
+
                     holdings_query = self.db_session.query(Holding).join(
                         Document, Holding.document_id == Document.id
+                    ).filter(
+                        Document.session_id == session_id  # Always filter by session
                     )
-
-                    # Filter by session_id
-                    if session_id:
-                        holdings_query = holdings_query.filter(Document.session_id == session_id)
 
                     holdings = holdings_query.all()
 
@@ -437,16 +443,17 @@ Last Updated: {price_data.get('timestamp', 'N/A')}"""
                 print(f"\n🔍 [check_specific_holding] Symbol: {symbol}")
                 print(f"   Session ID: {session_id}")
 
+                # SECURITY: Require session_id to prevent data leaks
+                if not session_id:
+                    return "Error: session_id is required for security. Cannot query holdings without session isolation."
+
                 # Query for specific symbol (session-filtered)
                 holdings_query = self.db_session.query(Holding).join(
                     Document, Holding.document_id == Document.id
                 ).filter(
-                    Holding.symbol == symbol
+                    Holding.symbol == symbol,
+                    Document.session_id == session_id  # Always filter by session
                 )
-
-                # Filter by session if provided
-                if session_id:
-                    holdings_query = holdings_query.filter(Document.session_id == session_id)
 
                 holdings = holdings_query.all()
 

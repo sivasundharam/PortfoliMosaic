@@ -8,14 +8,30 @@ function createSessionName(idx) {
   return `Session ${idx}`
 }
 
+// Useful prompt suggestions
+const PROMPT_SUGGESTIONS = [
+  { icon: '📊', label: 'List all holdings', prompt: 'List all my holdings with current values' },
+  { icon: '💰', label: 'Portfolio summary', prompt: 'Give me a summary of my portfolio including total value and asset allocation' },
+  { icon: '📈', label: 'Top performers', prompt: 'Which holdings have the highest gains?' },
+  { icon: '📉', label: 'Losses & tax harvesting', prompt: 'Show me holdings with losses for potential tax-loss harvesting' },
+  { icon: '🏦', label: 'Account breakdown', prompt: 'How many accounts do I have and what are they?' },
+  { icon: '🔍', label: 'Specific stock', prompt: 'Do I own any Apple (AAPL) shares?' },
+  { icon: '💵', label: 'Dividends & income', prompt: 'What dividends and interest did I receive?' },
+  { icon: '📄', label: 'Document summary', prompt: 'Summarize the key information from my uploaded documents' },
+  { icon: '⚖️', label: 'Balance sheet analysis', prompt: 'What are the total assets and liabilities on the balance sheet?' },
+  { icon: '💸', label: 'Fees paid', prompt: 'What fees did I pay to my brokerage?' },
+]
+
 export default function App() {
   const [busy, setBusy] = useState(false)
   const [sessions, setSessions] = useState(() => [{ id: crypto.randomUUID(), name: createSessionName(1), documents: [], messages: [] }])
   const [activeSessionId, setActiveSessionId] = useState(() => sessions[0].id)
   const [questionInput, setQuestionInput] = useState('What are my holdings?')
+  const [showPromptMenu, setShowPromptMenu] = useState(false)
   const fileInputRef = useRef(null)
   const messagesEndRef = useRef(null)
   const uploadProgressRef = useRef({})
+  const promptMenuRef = useRef(null)
 
   const active = useMemo(() => sessions.find(s => s.id === activeSessionId) || sessions[0], [sessions, activeSessionId])
 
@@ -23,6 +39,19 @@ export default function App() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [active.messages])
+
+  // Close prompt menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (promptMenuRef.current && !promptMenuRef.current.contains(event.target)) {
+        setShowPromptMenu(false)
+      }
+    }
+    if (showPromptMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showPromptMenu])
 
   function addSession() {
     const idx = sessions.length + 1
@@ -201,11 +230,20 @@ export default function App() {
     }
   }
 
-  function handleKeyPress(e) {
+  function handleKeyDown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       ask()
     }
+  }
+
+  function selectPrompt(prompt) {
+    setQuestionInput(prompt)
+    setShowPromptMenu(false)
+  }
+
+  function togglePromptMenu() {
+    setShowPromptMenu(prev => !prev)
   }
 
   return (
@@ -276,17 +314,100 @@ export default function App() {
         </div>
 
         {/* Input docked bottom */}
-        <footer style={{ padding: 14, borderTop: '1px solid #e2e8f0', background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(10px)' }}>
-          <div style={{ display: 'flex', gap: 10 }}>
+        <footer style={{ padding: 14, borderTop: '1px solid #e2e8f0', background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(10px)', position: 'relative' }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {/* Prompt suggestions button */}
+            <div style={{ position: 'relative' }} ref={promptMenuRef}>
+              <button
+                onClick={togglePromptMenu}
+                disabled={busy}
+                title="Prompt suggestions"
+                aria-label="Show prompt suggestions"
+                style={{
+                  width: 46,
+                  height: 46,
+                  borderRadius: '50%',
+                  background: showPromptMenu ? 'linear-gradient(135deg, #f59e0b, #f97316)' : 'linear-gradient(135deg, #fbbf24, #f59e0b)',
+                  color: '#fff',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 20,
+                  boxShadow: '0 4px 12px rgba(245,158,11,0.3)',
+                  cursor: busy ? 'not-allowed' : 'pointer',
+                  opacity: busy ? 0.6 : 1,
+                  transition: 'all 120ms ease'
+                }}
+                onMouseDown={e => !busy && (e.currentTarget.style.transform = 'scale(0.96)')}
+                onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}
+              >
+                💡
+              </button>
+
+              {/* Prompt suggestions popup */}
+              {showPromptMenu && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: '100%',
+                  left: 0,
+                  marginBottom: 10,
+                  background: '#ffffff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 16,
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+                  width: 380,
+                  maxHeight: 480,
+                  overflowY: 'auto',
+                  zIndex: 1000,
+                  animation: 'slideUp 200ms ease-out'
+                }}>
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', background: 'linear-gradient(135deg, #f8fafc, #eef2ff)' }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>💡 Prompt Suggestions</div>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Click to use a prompt</div>
+                  </div>
+                  <div style={{ padding: 8 }}>
+                    {PROMPT_SUGGESTIONS.map((suggestion, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => selectPrompt(suggestion.prompt)}
+                        style={{
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '12px 14px',
+                          border: 'none',
+                          background: 'transparent',
+                          borderRadius: 12,
+                          cursor: 'pointer',
+                          transition: 'background 120ms ease',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg, #f0f9ff, #e0f2fe)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <span style={{ fontSize: 24, flexShrink: 0 }}>{suggestion.icon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginBottom: 2 }}>{suggestion.label}</div>
+                          <div style={{ fontSize: 12, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{suggestion.prompt}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <input
               style={{ flex: 1, border: '1px solid #c7d2fe', borderRadius: 999, padding: '14px 18px', outline: 'none', background: 'linear-gradient(135deg, #ffffff, #f8fafc)' }}
               value={questionInput}
               onChange={e => setQuestionInput(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyDown}
               placeholder="Ask a question about your statements... (Press Enter to send)"
               disabled={busy}
             />
-            <button onClick={ask} disabled={busy} style={{ background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: '#fff', border: 'none', padding: '0 20px', borderRadius: 999, boxShadow: '0 6px 16px rgba(99,102,241,0.35)', transition: 'transform 120ms ease', opacity: busy ? 0.6 : 1, cursor: busy ? 'not-allowed' : 'pointer' }} onMouseDown={e => !busy && (e.currentTarget.style.transform = 'scale(0.98)')} onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}>
+            <button onClick={ask} disabled={busy} style={{ background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: '#fff', border: 'none', padding: '14px 24px', borderRadius: 999, boxShadow: '0 6px 16px rgba(99,102,241,0.35)', transition: 'transform 120ms ease', opacity: busy ? 0.6 : 1, cursor: busy ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', fontSize: 15, fontWeight: 600 }} onMouseDown={e => !busy && (e.currentTarget.style.transform = 'scale(0.98)')} onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}>
               {busy ? 'Sending...' : 'Send'}
             </button>
           </div>

@@ -19,14 +19,24 @@ class LandingAIClient:
     """
     Client for Landing AI ADE API using direct HTTP requests
 
+    Supports multiple document formats: PDF, PNG, JPG, JPEG, XLSX, XLS
+
     Features:
+    - Automatic file type detection and MIME type mapping
     - Manual retry logic for rate limits (429)
     - Exponential backoff
     - Support for both parse and extract operations
+    - File validation before API calls
 
     Usage:
         client = LandingAIClient()
-        result = client.parse_and_extract("document.pdf", PORTFOLIO_SCHEMA)
+
+        # Parse any supported document type
+        result = client.parse_document("statement.pdf")
+        markdown = result["markdown"]
+
+        # Or parse and extract in one call
+        result = client.parse_and_extract("statement.pdf", PORTFOLIO_SCHEMA)
         markdown = result["markdown"]
         extraction = result["extraction"]
     """
@@ -65,7 +75,7 @@ class LandingAIClient:
         self.timeout = timeout
         self.max_retries = max_retries
 
-    def parse_pdf(
+    def parse_document(
         self,
         file_path: str,
         model: Optional[str] = None,
@@ -73,10 +83,10 @@ class LandingAIClient:
         max_retries: Optional[int] = None
     ) -> Dict[str, Any]:
         """
-        Parse PDF document to markdown using Landing AI ADE
+        Parse document (PDF, PNG, JPG, JPEG, XLSX, XLS) to markdown using Landing AI ADE
 
         Args:
-            file_path: Path to the PDF file
+            file_path: Path to the document file
             model: ADE model to use (default: uses client's default model)
             timeout: Request timeout in seconds (default: uses client's default)
             max_retries: Maximum number of retries for rate limits (default: uses client's default)
@@ -84,11 +94,37 @@ class LandingAIClient:
         Returns:
             Dictionary containing:
             - markdown: Extracted markdown text
-            - metadata: Document metadata (page count, etc.)
+            - metadata: Document metadata (page count, file type, etc.)
 
         Raises:
-            LandingAIError: If parsing fails
+            LandingAIError: If parsing fails or file type is unsupported
         """
+        # Validate file exists
+        if not os.path.exists(file_path):
+            raise LandingAIError(f"File not found: {file_path}")
+
+        # Detect file type and MIME type
+        filename = os.path.basename(file_path)
+        ext = filename.lower().split(".")[-1] if "." in filename else ""
+
+        # Map file extensions to MIME types
+        mime_types = {
+            "pdf": "application/pdf",
+            "png": "image/png",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "xls": "application/vnd.ms-excel"
+        }
+
+        if ext not in mime_types:
+            raise LandingAIError(
+                f"Unsupported file type: .{ext}. "
+                f"Supported types: {', '.join(mime_types.keys())}"
+            )
+
+        mime_type = mime_types[ext]
+
         url = f"{self.base_url}/parse"
         headers = {
             "Authorization": f"Bearer {self.api_key}"
@@ -104,7 +140,7 @@ class LandingAIClient:
                     response = requests.post(
                         url,
                         headers=headers,
-                        files={"document": (os.path.basename(file_path), f, "application/pdf")},
+                        files={"document": (filename, f, mime_type)},  # Use correct MIME type
                         data={"model": model or self.model},
                         timeout=timeout_val
                     )
@@ -131,7 +167,9 @@ class LandingAIClient:
                 # Extract metadata
                 metadata = {
                     "pages": result.get("pages", 0),
-                    "model": model or self.model
+                    "model": model or self.model,
+                    "file_type": ext,
+                    "mime_type": mime_type
                 }
 
                 if attempt > 0:
@@ -149,10 +187,31 @@ class LandingAIClient:
             except requests.exceptions.HTTPError as e:
                 raise LandingAIError(f"Landing AI API request failed: {str(e)}")
             except Exception as e:
-                raise LandingAIError(f"Unexpected error during PDF parsing: {str(e)}")
+                raise LandingAIError(f"Unexpected error during document parsing: {str(e)}")
 
         # Should never reach here
-        raise LandingAIError("Failed to parse PDF after all retries")
+        raise LandingAIError(f"Failed to parse document after all retries")
+
+    def parse_pdf(
+        self,
+        file_path: str,
+        model: Optional[str] = None,
+        timeout: Optional[int] = None,
+        max_retries: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        DEPRECATED: Use parse_document() instead.
+
+        Backward compatibility alias for parse_document().
+        This method will be removed in a future version.
+        """
+        import warnings
+        warnings.warn(
+            "parse_pdf() is deprecated, use parse_document() instead",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        return self.parse_document(file_path, model, timeout, max_retries)
 
     def extract_from_markdown(
         self,
@@ -255,10 +314,10 @@ class LandingAIClient:
         model: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Convenience method to parse PDF and extract structured data in one call
+        Convenience method to parse document and extract structured data in one call
 
         Args:
-            file_path: Path to the PDF file
+            file_path: Path to the document file (PDF, PNG, JPG, JPEG, XLSX, XLS)
             schema: JSON schema defining the structure to extract
             model: ADE model to use (default: uses client's default model)
 
@@ -266,18 +325,18 @@ class LandingAIClient:
             Dictionary containing:
             - markdown: Extracted markdown text
             - extraction: Extracted structured data
-            - metadata: Document metadata
+            - metadata: Document metadata (includes file_type, mime_type)
             - confidence: Confidence scores
 
         Raises:
             LandingAIError: If parsing or extraction fails
         """
-        # Step 1: Parse PDF to markdown
-        parsed = self.parse_pdf(file_path, model=model)
+        # Step 1: Parse document to markdown
+        parsed = self.parse_document(file_path, model=model)
         markdown = parsed.get("markdown", "")
 
         if not markdown:
-            raise LandingAIError("No markdown content extracted from PDF")
+            raise LandingAIError("No markdown content extracted from document")
 
         # Step 2: Extract structured data from markdown
         extraction_result = self.extract_from_markdown(markdown, schema)

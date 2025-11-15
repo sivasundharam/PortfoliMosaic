@@ -3,10 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import os
-import shutil
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
+import time
+import uuid
+import json
 
 # Load environment variables from .env file (look in project root)
 import pathlib
@@ -89,7 +91,7 @@ class IngestResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str
-    session_id: Optional[str] = None
+    session_id: str  # REQUIRED for session isolation and security
     top_k: int = 4
 
 
@@ -200,8 +202,6 @@ def _table_to_text(table: List[List[str]]) -> str:
 
 
 def extract_and_classify(document_id: str, filename: str):
-    import time
-    import json
 
     # ========================================
     # PERFORMANCE TRACKING
@@ -247,12 +247,13 @@ def extract_and_classify(document_id: str, filename: str):
         try:
             landing_client = LandingAIClient()
 
-            # Step 1: Parse PDF → Markdown
+            # Step 1: Parse Document → Markdown
             step_start = time.time()
-            print(f"📄 [1/5] Parsing PDF with Landing AI ADE...")
-            parsed = landing_client.parse_pdf(file_path)
+            print(f"📄 [1/5] Parsing document with Landing AI ADE...")
+            parsed = landing_client.parse_document(file_path)
             markdown = parsed.get("markdown", "")
-            print(f"   ✓ Extracted {len(markdown)} characters of markdown")
+            file_type = parsed.get("metadata", {}).get("file_type", "unknown")
+            print(f"   ✓ Extracted {len(markdown)} characters of markdown from {file_type.upper()} file")
             step_start = log_timing("LANDING_AI_PARSE", step_start)
 
             if not markdown or len(markdown.strip()) < 10:
@@ -414,7 +415,7 @@ def extract_and_classify(document_id: str, filename: str):
         # Update document with type and status
         step_start = time.time()
         doc.document_type = doc_type
-        doc.extraction_status = "completed"
+        doc.extraction_status = "extracted"
         db.commit()
         step_start = log_timing("DB_UPDATE", step_start)
 
@@ -442,6 +443,8 @@ def extract_and_classify(document_id: str, filename: str):
 
             print(f"   ✓ Created {len(chunks)} chunks")
             step_start = log_timing("CHUNKING", step_start)
+            doc.extraction_status = "ingesting"
+            db.commit()
 
             if chunks:
                 step_start = time.time()
@@ -475,6 +478,8 @@ def extract_and_classify(document_id: str, filename: str):
 
                 print(f"   ✓ Ingested successfully")
                 step_start = log_timing("VECTOR_INGEST", step_start)
+                doc.extraction_status = "completed"
+                db.commit()
         except Exception as e:
             import traceback
             print(f"❌ Error ingesting chunks: {traceback.format_exc()}")
@@ -546,8 +551,6 @@ async def upload_document(
         raise HTTPException(status_code=400, detail=f"Unsupported file type: .{ext}")
 
     safe_name = filename.replace(" ", "_")
-    import time
-    import uuid
     document_id = f"{int(time.time())}_{uuid.uuid4().hex[:8]}_{safe_name}"
     dest_path = os.path.join(UPLOAD_DIR, document_id)
 
@@ -603,40 +606,58 @@ async def get_document_status(document_id: str, db=Depends(get_db)):
     }
 
 
-@app.post(f"{APP_PREFIX}/extract/{{document_id}}", response_model=ExtractResponse)
-async def extract_document(document_id: str, db=Depends(get_db)):
-    src_path = os.path.join(UPLOAD_DIR, document_id)
-    if not os.path.exists(src_path):
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    # Stub extraction: write placeholder text; later integrate ADE
-    txt_path = os.path.join(EXTRACTED_DIR, f"{document_id}.txt")
-    with open(txt_path, "w", encoding="utf-8") as f:
-        f.write(f"Extracted placeholder text for {document_id}\n\n")
-        f.write("Holdings: AAPL 10, MSFT 5\n")
-        f.write("Balance Sheet: Assets 100, Liabilities 40, Equity 60\n")
-
-    # Also persist minimal structured placeholders
-    doc = db.query(Document).filter(Document.document_id == document_id).one_or_none()
-    if doc:
-        # Clear previous demo data
-        db.query(Holding).filter(Holding.document_id == doc.id).delete()
-        db.query(BalanceSheetItem).filter(BalanceSheetItem.document_id == doc.id).delete()
-        # Insert placeholders
-        db.add_all([
-            Holding(document_id=doc.id, symbol="AAPL", quantity=10, currency="USD"),
-            Holding(document_id=doc.id, symbol="MSFT", quantity=5, currency="USD"),
-            BalanceSheetItem(document_id=doc.id, name="Assets", value=100, period="latest"),
-            BalanceSheetItem(document_id=doc.id, name="Liabilities", value=40, period="latest"),
-            BalanceSheetItem(document_id=doc.id, name="Equity", value=60, period="latest"),
-        ])
-        db.commit()
-
-    return ExtractResponse(document_id=document_id, status="extracted")
-
-
 @app.post(f"{APP_PREFIX}/ingest/{{document_id}}", response_model=IngestResponse)
 async def ingest_document(document_id: str, db=Depends(get_db)):
+    """
+    Manually ingest extracted document content into FAISS vector database for semantic search.
+
+    **NOTE:** This endpoint is NOT called by the UI during normal operation.
+    Ingestion happens automatically during the extraction process (extract_and_classify function).
+
+    **When to use this endpoint:**
+
+    1. **FAISS Index Recovery:**
+       - If data/vector_index/ directory is corrupted or deleted
+       - Re-index all documents without re-extracting from PDFs
+       - Example: `POST /api/ingest/{document_id}` for each document
+
+    2. **Testing Chunking Strategy Changes:**
+       - After modifying _chunk_markdown() or _chunk_text() functions
+       - Re-ingest documents to test new chunking parameters
+       - Compare search quality with different chunk sizes/overlaps
+
+    3. **Debugging RAG Issues:**
+       - Verify how many chunks were created from a document
+       - Check if document content is being indexed correctly
+       - Response shows chunks_indexed count for verification
+
+    4. **Selective Re-indexing:**
+       - Re-index specific documents without full re-extraction
+       - Useful when extraction succeeded but ingestion failed
+
+    **Prerequisites:**
+    - Document must already be extracted (markdown file must exist in data/extracted/)
+    - If not extracted, call /documents/{document_id}/re-extract first
+
+    **Process:**
+    1. Reads extracted markdown from data/extracted/{document_id}.md
+    2. Chunks the text using _chunk_markdown() (preserves structure)
+    3. Embeds chunks using sentence-transformers (384-dim vectors)
+    4. Stores vectors in FAISS index with metadata
+    5. Returns count of chunks indexed
+
+    **Response:**
+    - document_id: The document that was ingested
+    - chunks_indexed: Number of text chunks created and indexed
+
+    **Example Usage:**
+    ```bash
+    # Re-ingest a single document
+    curl -X POST http://localhost:8000/api/ingest/1699564321_abc123_fidelity.pdf
+
+    # Response: {"document_id": "1699564321_abc123_fidelity.pdf", "chunks_indexed": 15}
+    ```
+    """
     txt_path = os.path.join(EXTRACTED_DIR, f"{document_id}.txt")
     md_path = os.path.join(EXTRACTED_DIR, f"{document_id}.md")
 
@@ -667,16 +688,76 @@ async def ingest_document(document_id: str, db=Depends(get_db)):
 
 @app.post(f"{APP_PREFIX}/documents/{{document_id}}/re-extract", response_model=ExtractResponse)
 async def re_extract_document(document_id: str):
-    """Re-extract and re-ingest a document (useful if extraction failed or was placeholder)"""
+    """
+    Re-extract and re-ingest a document from the original uploaded file.
+
+    **NOTE:** This endpoint is NOT called by the UI during normal operation.
+    Extraction happens automatically once when a file is uploaded.
+
+    **When to use this endpoint:**
+
+    1. **Extraction Failed:**
+       - Initial extraction encountered an error (status = 'error' or 'failed')
+       - Landing AI ADE API was temporarily unavailable
+       - Network timeout during extraction
+       - Re-run the entire extraction pipeline
+
+    2. **Extraction Schema Updated:**
+       - Modified PORTFOLIO_SCHEMA in extraction_schema.py
+       - Added new fields to extract (e.g., new account types, transaction types)
+       - Re-extract to get newly defined structured data
+
+    3. **Landing AI ADE Improvements:**
+       - Landing AI released improved extraction models
+       - Want to re-extract with better accuracy
+       - Compare old vs new extraction results
+
+    4. **Testing/Development:**
+       - Testing changes to extract_and_classify() function
+       - Debugging extraction pipeline issues
+       - Verifying document classification logic
+
+    **What this endpoint does:**
+    1. Reads original file from data/uploads/{document_id}
+    2. Calls Landing AI ADE to parse PDF → Markdown
+    3. Extracts structured data using PORTFOLIO_SCHEMA
+    4. Classifies document type (BrokerageStatement, BalanceSheet, etc.)
+    5. Saves holdings, accounts, financial statements to database
+    6. Chunks and indexes content into FAISS for RAG
+    7. Updates document status to 'completed' or 'error'
+
+    **Process runs in background thread** - returns immediately with status "re-extracted"
+    Poll /documents/{document_id}/status to check progress
+
+    **Response:**
+    - document_id: The document being re-extracted
+    - status: "re-extracted" (processing started)
+
+    **Example Usage:**
+    ```bash
+    # Re-extract a failed document
+    curl -X POST http://localhost:8000/api/documents/1699564321_abc123_fidelity.pdf/re-extract
+
+    # Response: {"document_id": "1699564321_abc123_fidelity.pdf", "status": "re-extracted"}
+
+    # Then poll for status
+    curl http://localhost:8000/api/documents/1699564321_abc123_fidelity.pdf/status
+    # Response: {"extraction_status": "extracting"} → "completed"
+    ```
+
+    **Difference from /ingest:**
+    - /re-extract: Re-runs FULL extraction (PDF → Markdown → Database → FAISS)
+    - /ingest: Only re-indexes existing markdown into FAISS (no PDF parsing)
+    """
     db = SessionLocal()
     try:
         doc = db.query(Document).filter(Document.document_id == document_id).one_or_none()
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
-        
+
         # Trigger re-extraction
         extract_and_classify(document_id, doc.filename)
-        
+
         return ExtractResponse(document_id=document_id, status="re-extracted")
     finally:
         db.close()
@@ -689,10 +770,19 @@ async def chat_rag(request: ChatRequest, db=Depends(get_db)):
 
     Uses PortfolioAgent (LangChain agent with RAG + SQL + API tools) by default.
     Set USE_AGENT=false in .env to use old RAGService.
+
+    SECURITY: session_id is REQUIRED for data isolation between users.
     """
     # DEBUG: Log incoming request
     print(f"\n💬 [CHAT] Question: {request.question[:100]}...")
     print(f"   Session ID: {request.session_id}")
+
+    # SECURITY: Validate session_id is not empty
+    if not request.session_id or not request.session_id.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="session_id is required for security and data isolation"
+        )
 
     if USE_AGENT:
         # NEW: Use portfolio agent (LLM decides which tools to use: RAG, SQL, API)
@@ -717,8 +807,8 @@ async def chat_rag(request: ChatRequest, db=Depends(get_db)):
         )
         for c in result.get("citations", [])
     ]
-    session_id = request.session_id or "session-1"
-    return ChatResponse(answer=result.get("answer", ""), citations=citations, session_id=session_id)
+    # session_id is guaranteed to exist (validated above)
+    return ChatResponse(answer=result.get("answer", ""), citations=citations, session_id=request.session_id)
 
 
 # ----- Financials Endpoints -----
